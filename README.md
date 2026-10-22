@@ -1,47 +1,27 @@
-# GoOdf Android – Basic Organ Definition File Editor
+# GoOdf Android – Organ Definition File Editor
 
-Simple Android app for editing GrandOrgue `.organ` files.  
-Focused on **Stops**, **Ranks**, **Couplers**, **Tremulants** and **MIDI mapping**.
+Simplified Android version of GoOdf for creating and editing GrandOrgue `.organ` files.
 
-## Features (v0.2)
+## Features (focused)
 
-- Open / Save `.organ` files
-- Edit Stops, Ranks, Couplers, Tremulants
-- MIDI mapping (`StopControlMIDIKeyNumber`)
-- Lightweight UI (no heavy panel designer)
+1. **Organ** – name, church name, file name
+2. **Manuals** – add Pedal / Manual 1, 2, … (keys, MIDI)
+3. **Windchestgroups** – add / edit / delete
+4. **Tremulants** – add / edit / delete
+5. **Ranks** – add manually OR **Import Ranks from another .organ file**
 
-## Download APK (GitHub Actions)
+## Workflow
 
-Ang APK ay automatic na na-build sa GitHub.
+1. **New** – start a blank organ
+2. Add Manuals (Pedal + manuals)
+3. Add Windchest groups
+4. Add Tremulants
+5. Add Ranks (or Import from existing .organ)
+6. **Save** as `.organ` file
 
-### Paano i-download ang APK:
+## Download APK
 
-1. Pumunta sa **Actions** tab ng repo
-2. Click ang pinakabagong **Build APK** workflow
-3. Sa baba, under **Artifacts**, i-download ang `GoOdf-Android-debug`
-4. I-extract ang zip → makikita mo ang `.apk` file
-5. I-install sa phone (payagan ang "Unknown sources")
-
-### Manual trigger:
-
-1. Pumunta sa **Actions** → **Build APK**
-2. Click **Run workflow** → **Run workflow**
-
-### Release (optional):
-
-Kapag gumawa ka ng **Release** sa GitHub, automatic na mai-attach ang APK doon.
-
-## Build locally (optional)
-
-Kung may Android Studio ka:
-
-1. Open the project
-2. **Build → Build Bundle(s) / APK(s) → Build APK(s)**
-3. APK location: `app/build/outputs/apk/debug/app-debug.apk`
-
-## Requirements
-
-- Android 8.0+ (API 26)
+Use **Actions** → **Build APK** → download artifact.
 
 ## License
 

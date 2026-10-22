@@ -2,291 +2,203 @@ package com.example.goodfandroid.parser
 
 import com.example.goodfandroid.model.*
 
-/**
- * Simple parser for GrandOrgue .organ files (INI-style format).
- * Supports: Organ, Manual, Stop, Rank, Coupler, Tremulant.
- * More flexible matching for real-world .organ files.
- */
 object OrganParser {
+
+    private fun Map<String, String>.getCI(key: String): String? =
+        entries.find { it.key.equals(key, ignoreCase = true) }?.value
+
+    private fun extractNumber(name: String, prefix: String): Int? {
+        if (!name.startsWith(prefix, ignoreCase = true)) return null
+        val rest = name.substring(prefix.length)
+        return rest.trimStart('0').ifEmpty { "0" }.toIntOrNull() ?: rest.toIntOrNull()
+    }
 
     fun parse(content: String): Organ {
         val organ = Organ()
-        // Normalize line endings and remove BOM if present
-        val cleaned = content
-            .removePrefix("\uFEFF")
-            .replace("\r\n", "\n")
-            .replace("\r", "\n")
-
-        val lines = cleaned.lines()
-
-        var currentSection: String? = null
+        val cleaned = content.removePrefix("\uFEFF").replace("\r\n", "\n").replace("\r", "\n")
         val sections = mutableMapOf<String, MutableMap<String, String>>()
+        var current: String? = null
 
-        for (rawLine in lines) {
-            val line = rawLine.trim()
-            if (line.isEmpty() || line.startsWith(";") || line.startsWith("#") || line.startsWith("//")) continue
-
-            // Section header: [Something]
+        for (raw in cleaned.lines()) {
+            val line = raw.trim()
+            if (line.isEmpty() || line.startsWith(";") || line.startsWith("#")) continue
             if (line.startsWith("[") && line.contains("]")) {
-                val end = line.indexOf(']')
-                currentSection = line.substring(1, end).trim()
-                if (!sections.containsKey(currentSection)) {
-                    sections[currentSection] = mutableMapOf()
-                }
+                current = line.substring(1, line.indexOf(']')).trim()
+                sections.putIfAbsent(current, mutableMapOf())
                 continue
             }
-
-            // Key=Value (also accept Key = Value)
-            val eqIndex = line.indexOf('=')
-            if (eqIndex > 0 && currentSection != null) {
-                val key = line.substring(0, eqIndex).trim()
-                val value = line.substring(eqIndex + 1).trim()
-                // Skip pure comments on value side
-                if (key.isNotEmpty()) {
-                    sections[currentSection]!![key] = value
-                }
+            val eq = line.indexOf('=')
+            if (eq > 0 && current != null) {
+                sections[current]!![line.substring(0, eq).trim()] = line.substring(eq + 1).trim()
             }
         }
 
-        // Parse [Organ] (case-insensitive key lookup helper)
-        fun Map<String, String>.getCI(key: String): String? {
-            return entries.find { it.key.equals(key, ignoreCase = true) }?.value
+        sections.entries.find { it.key.equals("Organ", true) }?.value?.let { p ->
+            organ.churchName = p.getCI("ChurchName") ?: ""
+            organ.organName = p.getCI("OrganName") ?: p.getCI("Name") ?: "Organ"
+            organ.numberOfManuals = p.getCI("NumberOfManuals")?.toIntOrNull() ?: 0
+            organ.hasPedals = (p.getCI("HasPedals") ?: "N").uppercase() in listOf("Y", "YES", "TRUE", "1")
+            organ.amplitudeLevel = p.getCI("AmplitudeLevel")?.toDoubleOrNull() ?: 100.0
         }
 
-        sections.entries.find { it.key.equals("Organ", ignoreCase = true) }?.value?.let { props ->
-            organ.churchName = props.getCI("ChurchName") ?: ""
-            organ.organName = props.getCI("OrganName") ?: props.getCI("Name") ?: ""
-            organ.numberOfManuals = props.getCI("NumberOfManuals")?.toIntOrNull() ?: 0
-            organ.hasPedals = (props.getCI("HasPedals") ?: "N").uppercase() in listOf("Y", "YES", "TRUE", "1")
-        }
-
-        // Helper to extract trailing number from section name
-        fun extractNumber(name: String, prefix: String): Int? {
-            if (!name.startsWith(prefix, ignoreCase = true)) return null
-            val numPart = name.substring(prefix.length).trimStart('0').ifEmpty { "0" }
-            return numPart.toIntOrNull() ?: name.substring(prefix.length).toIntOrNull()
-        }
-
-        for ((sectionName, props) in sections) {
+        for ((sec, props) in sections) {
             when {
-                sectionName.startsWith("Manual", ignoreCase = true) && sectionName.length > 6 -> {
-                    val num = extractNumber(sectionName, "Manual") ?: continue
-                    val manual = Manual(
-                        number = num,
-                        name = props.getCI("Name") ?: "Manual $num",
-                        numberOfLogicalKeys = props.getCI("NumberOfLogicalKeys")?.toIntOrNull() ?: 61,
+                sec.startsWith("Manual", true) && sec.length > 6 -> {
+                    val n = extractNumber(sec, "Manual") ?: continue
+                    organ.manuals.add(Manual(
+                        number = n,
+                        name = props.getCI("Name") ?: if (n == 0) "Pedal" else "Manual $n",
+                        numberOfLogicalKeys = props.getCI("NumberOfLogicalKeys")?.toIntOrNull() ?: if (n == 0) 32 else 61,
                         firstAccessibleKeyMIDINoteNumber = props.getCI("FirstAccessibleKeyMIDINoteNumber")?.toIntOrNull() ?: 36,
-                        numberOfAccessibleKeys = props.getCI("NumberOfAccessibleKeys")?.toIntOrNull() ?: 61,
-                        midiInputNumber = props.getCI("MIDIInputNumber")?.toIntOrNull() ?: 1,
+                        numberOfAccessibleKeys = props.getCI("NumberOfAccessibleKeys")?.toIntOrNull() ?: if (n == 0) 32 else 61,
+                        midiInputNumber = props.getCI("MIDIInputNumber")?.toIntOrNull() ?: (n + 1),
                         numberOfStops = props.getCI("NumberOfStops")?.toIntOrNull() ?: 0,
                         numberOfCouplers = props.getCI("NumberOfCouplers")?.toIntOrNull() ?: 0,
                         numberOfTremulants = props.getCI("NumberOfTremulants")?.toIntOrNull() ?: 0,
                         rawProperties = props.toMutableMap()
-                    )
-                    props.forEach { (k, v) ->
-                        when {
-                            k.startsWith("Stop", ignoreCase = true) ->
-                                v.toIntOrNull()?.let { manual.stopNumbers.add(it) }
-                            k.startsWith("Coupler", ignoreCase = true) ->
-                                v.toIntOrNull()?.let { manual.couplerNumbers.add(it) }
-                            k.startsWith("Tremulant", ignoreCase = true) ->
-                                v.toIntOrNull()?.let { manual.tremulantNumbers.add(it) }
-                        }
-                    }
-                    organ.manuals.add(manual)
+                    ))
                 }
-
-                sectionName.startsWith("Stop", ignoreCase = true) && sectionName.length > 4 -> {
-                    val num = extractNumber(sectionName, "Stop") ?: continue
-                    val stop = Stop(
-                        number = num,
-                        name = props.getCI("Name") ?: "Stop $num",
-                        numberOfRanks = props.getCI("NumberOfRanks")?.toIntOrNull() ?: 0,
-                        stopControlMIDIKeyNumber = props.getCI("StopControlMIDIKeyNumber")?.toIntOrNull(),
-                        firstAccessiblePipeLogicalKeyNumber = props.getCI("FirstAccessiblePipeLogicalKeyNumber")?.toIntOrNull(),
-                        numberOfAccessiblePipes = props.getCI("NumberOfAccessiblePipes")?.toIntOrNull(),
+                sec.startsWith("WindchestGroup", true) || sec.startsWith("Windchest", true) -> {
+                    val n = extractNumber(sec, "WindchestGroup")
+                        ?: extractNumber(sec, "Windchest") ?: continue
+                    val w = Windchest(
+                        number = n,
+                        name = props.getCI("Name") ?: "Windchest $n",
+                        numberOfEnclosures = props.getCI("NumberOfEnclosures")?.toIntOrNull() ?: 0,
+                        numberOfTremulants = props.getCI("NumberOfTremulants")?.toIntOrNull() ?: 0,
                         rawProperties = props.toMutableMap()
                     )
-                    props.forEach { (k, v) ->
-                        if (k.startsWith("Rank", ignoreCase = true)) {
-                            v.toIntOrNull()?.let { stop.rankNumbers.add(it) }
-                        }
-                    }
-                    organ.stops.add(stop)
+                    organ.windchests.add(w)
                 }
-
-                sectionName.startsWith("Rank", ignoreCase = true) && sectionName.length > 4 -> {
-                    val num = extractNumber(sectionName, "Rank") ?: continue
-                    val rank = Rank(
-                        number = num,
-                        name = props.getCI("Name") ?: "Rank $num",
+                sec.startsWith("Tremulant", true) && sec.length > 9 -> {
+                    val n = extractNumber(sec, "Tremulant") ?: continue
+                    organ.tremulants.add(Tremulant(
+                        number = n,
+                        name = props.getCI("Name") ?: "Tremulant $n",
+                        tremulantType = props.getCI("TremulantType") ?: props.getCI("Type") ?: "Synth",
+                        period = props.getCI("Period")?.toIntOrNull() ?: 200,
+                        startRate = props.getCI("StartRate")?.toIntOrNull() ?: 30,
+                        stopRate = props.getCI("StopRate")?.toIntOrNull() ?: 30,
+                        ampModDepth = props.getCI("AmpModDepth")?.toIntOrNull() ?: 20,
+                        stopControlMIDIKeyNumber = props.getCI("StopControlMIDIKeyNumber")?.toIntOrNull(),
+                        rawProperties = props.toMutableMap()
+                    ))
+                }
+                sec.startsWith("Rank", true) && sec.length > 4 -> {
+                    val n = extractNumber(sec, "Rank") ?: continue
+                    organ.ranks.add(Rank(
+                        number = n,
+                        name = props.getCI("Name") ?: "Rank $n",
                         firstMidiNoteNumber = props.getCI("FirstMIDINoteNumber")?.toIntOrNull()
                             ?: props.getCI("FirstMidiNoteNumber")?.toIntOrNull() ?: 36,
                         numberOfLogicalPipes = props.getCI("NumberOfLogicalPipes")?.toIntOrNull() ?: 61,
-                        windchestGroup = props.getCI("WindchestGroup")?.toIntOrNull(),
+                        windchestGroup = props.getCI("WindchestGroup")?.toIntOrNull() ?: 1,
+                        samplePath = props.getCI("Pipe001")?.substringBeforeLast("/")?.plus("/") ?: "",
                         rawProperties = props.toMutableMap()
-                    )
-                    organ.ranks.add(rank)
+                    ))
                 }
-
-                sectionName.startsWith("Coupler", ignoreCase = true) && sectionName.length > 7 -> {
-                    val num = extractNumber(sectionName, "Coupler") ?: continue
-                    val coupler = Coupler(
-                        number = num,
-                        name = props.getCI("Name") ?: "Coupler $num",
-                        sourceManual = props.getCI("SourceManual")?.toIntOrNull(),
-                        destinationManual = props.getCI("DestinationManual")?.toIntOrNull(),
-                        couplerType = props.getCI("CouplerType") ?: props.getCI("Type") ?: "",
-                        unisonOff = (props.getCI("UnisonOff") ?: "N").uppercase() in listOf("Y", "YES", "TRUE", "1"),
-                        destinationKeyShift = props.getCI("DestinationKeyShift")?.toIntOrNull() ?: 0,
-                        stopControlMIDIKeyNumber = props.getCI("StopControlMIDIKeyNumber")?.toIntOrNull()
-                            ?: props.getCI("MIDIKeyNumber")?.toIntOrNull(),
-                        rawProperties = props.toMutableMap()
-                    )
-                    organ.couplers.add(coupler)
-                }
-
-                sectionName.startsWith("Tremulant", ignoreCase = true) && sectionName.length > 9 -> {
-                    val num = extractNumber(sectionName, "Tremulant") ?: continue
-                    val trem = Tremulant(
-                        number = num,
-                        name = props.getCI("Name") ?: "Tremulant $num",
-                        tremulantType = props.getCI("TremulantType") ?: props.getCI("Type") ?: "Synth",
-                        period = props.getCI("Period")?.toIntOrNull(),
-                        startRate = props.getCI("StartRate")?.toIntOrNull(),
-                        stopRate = props.getCI("StopRate")?.toIntOrNull(),
-                        ampModDepth = props.getCI("AmpModDepth")?.toIntOrNull(),
-                        stopControlMIDIKeyNumber = props.getCI("StopControlMIDIKeyNumber")?.toIntOrNull()
-                            ?: props.getCI("MIDIKeyNumber")?.toIntOrNull(),
-                        rawProperties = props.toMutableMap()
-                    )
-                    organ.tremulants.add(trem)
-                }
-
                 else -> {
-                    if (!sectionName.equals("Organ", ignoreCase = true)) {
-                        organ.otherSections[sectionName] = props.toMutableMap()
+                    if (!sec.equals("Organ", true)) {
+                        organ.otherSections[sec] = props.toMutableMap()
                     }
                 }
             }
         }
 
         organ.manuals.sortBy { it.number }
-        organ.stops.sortBy { it.number }
-        organ.ranks.sortBy { it.number }
-        organ.couplers.sortBy { it.number }
+        organ.windchests.sortBy { it.number }
         organ.tremulants.sortBy { it.number }
-
+        organ.ranks.sortBy { it.number }
+        organ.hasPedals = organ.manuals.any { it.number == 0 }
+        organ.numberOfManuals = organ.manuals.count { it.number > 0 }
         return organ
+    }
+
+    /** Import only Ranks from another .organ content into target organ */
+    fun importRanksFrom(content: String, target: Organ) {
+        val source = parse(content)
+        var nextNum = (target.ranks.maxOfOrNull { it.number } ?: 0) + 1
+        for (r in source.ranks) {
+            target.ranks.add(r.copy(number = nextNum))
+            nextNum++
+        }
+        target.ranks.sortBy { it.number }
     }
 
     fun write(organ: Organ): String {
         val sb = StringBuilder()
-
         sb.appendLine("[Organ]")
         if (organ.churchName.isNotBlank()) sb.appendLine("ChurchName=${organ.churchName}")
-        if (organ.organName.isNotBlank()) sb.appendLine("OrganName=${organ.organName}")
-        sb.appendLine("NumberOfManuals=${organ.numberOfManuals}")
-        sb.appendLine("HasPedals=${if (organ.hasPedals) "Y" else "N"}")
+        sb.appendLine("OrganName=${organ.organName}")
+        sb.appendLine("NumberOfManuals=${organ.manuals.count { it.number > 0 }}")
+        sb.appendLine("HasPedals=${if (organ.manuals.any { it.number == 0 }) "Y" else "N"}")
+        sb.appendLine("AmplitudeLevel=${organ.amplitudeLevel}")
         sb.appendLine()
 
-        for (m in organ.manuals) {
+        for (m in organ.manuals.sortedBy { it.number }) {
             sb.appendLine("[Manual${m.number.toString().padStart(3, '0')}]")
             sb.appendLine("Name=${m.name}")
             sb.appendLine("NumberOfLogicalKeys=${m.numberOfLogicalKeys}")
             sb.appendLine("FirstAccessibleKeyMIDINoteNumber=${m.firstAccessibleKeyMIDINoteNumber}")
             sb.appendLine("NumberOfAccessibleKeys=${m.numberOfAccessibleKeys}")
             sb.appendLine("MIDIInputNumber=${m.midiInputNumber}")
-            if (m.numberOfStops > 0) sb.appendLine("NumberOfStops=${m.numberOfStops}")
-            if (m.numberOfCouplers > 0) sb.appendLine("NumberOfCouplers=${m.numberOfCouplers}")
-            if (m.numberOfTremulants > 0) sb.appendLine("NumberOfTremulants=${m.numberOfTremulants}")
+            sb.appendLine("NumberOfStops=${m.numberOfStops}")
+            sb.appendLine("NumberOfCouplers=${m.numberOfCouplers}")
+            sb.appendLine("NumberOfTremulants=${m.numberOfTremulants}")
             m.rawProperties.forEach { (k, v) ->
                 if (k !in listOf("Name", "NumberOfLogicalKeys", "FirstAccessibleKeyMIDINoteNumber",
                         "NumberOfAccessibleKeys", "MIDIInputNumber", "NumberOfStops",
-                        "NumberOfCouplers", "NumberOfTremulants")) {
-                    sb.appendLine("$k=$v")
-                }
+                        "NumberOfCouplers", "NumberOfTremulants")) sb.appendLine("$k=$v")
             }
             sb.appendLine()
         }
 
-        for (s in organ.stops) {
-            sb.appendLine("[Stop${s.number.toString().padStart(3, '0')}]")
-            sb.appendLine("Name=${s.name}")
-            if (s.numberOfRanks > 0) sb.appendLine("NumberOfRanks=${s.numberOfRanks}")
-            s.stopControlMIDIKeyNumber?.let { sb.appendLine("StopControlMIDIKeyNumber=$it") }
-            s.firstAccessiblePipeLogicalKeyNumber?.let { sb.appendLine("FirstAccessiblePipeLogicalKeyNumber=$it") }
-            s.numberOfAccessiblePipes?.let { sb.appendLine("NumberOfAccessiblePipes=$it") }
-            s.rankNumbers.forEachIndexed { idx, rankNum ->
-                sb.appendLine("Rank${(idx + 1).toString().padStart(3, '0')}=$rankNum")
-            }
-            s.rawProperties.forEach { (k, v) ->
-                if (k !in listOf("Name", "NumberOfRanks", "StopControlMIDIKeyNumber",
-                        "FirstAccessiblePipeLogicalKeyNumber", "NumberOfAccessiblePipes") &&
-                    !k.startsWith("Rank", ignoreCase = true)) {
-                    sb.appendLine("$k=$v")
-                }
+        for (w in organ.windchests.sortedBy { it.number }) {
+            sb.appendLine("[WindchestGroup${w.number.toString().padStart(3, '0')}]")
+            sb.appendLine("Name=${w.name}")
+            sb.appendLine("NumberOfEnclosures=${w.numberOfEnclosures}")
+            sb.appendLine("NumberOfTremulants=${w.numberOfTremulants}")
+            w.rawProperties.forEach { (k, v) ->
+                if (k !in listOf("Name", "NumberOfEnclosures", "NumberOfTremulants")) sb.appendLine("$k=$v")
             }
             sb.appendLine()
         }
 
-        for (r in organ.ranks) {
+        for (t in organ.tremulants.sortedBy { it.number }) {
+            sb.appendLine("[Tremulant${t.number.toString().padStart(3, '0')}]")
+            sb.appendLine("Name=${t.name}")
+            sb.appendLine("TremulantType=${t.tremulantType}")
+            sb.appendLine("Period=${t.period}")
+            sb.appendLine("StartRate=${t.startRate}")
+            sb.appendLine("StopRate=${t.stopRate}")
+            sb.appendLine("AmpModDepth=${t.ampModDepth}")
+            t.stopControlMIDIKeyNumber?.let { sb.appendLine("StopControlMIDIKeyNumber=$it") }
+            t.rawProperties.forEach { (k, v) ->
+                if (k !in listOf("Name", "TremulantType", "Type", "Period", "StartRate",
+                        "StopRate", "AmpModDepth", "StopControlMIDIKeyNumber")) sb.appendLine("$k=$v")
+            }
+            sb.appendLine()
+        }
+
+        for (r in organ.ranks.sortedBy { it.number }) {
             sb.appendLine("[Rank${r.number.toString().padStart(3, '0')}]")
             sb.appendLine("Name=${r.name}")
             sb.appendLine("FirstMIDINoteNumber=${r.firstMidiNoteNumber}")
             sb.appendLine("NumberOfLogicalPipes=${r.numberOfLogicalPipes}")
-            r.windchestGroup?.let { sb.appendLine("WindchestGroup=$it") }
+            sb.appendLine("WindchestGroup=${r.windchestGroup}")
+            // Preserve existing pipe paths if any
             r.rawProperties.forEach { (k, v) ->
                 if (k !in listOf("Name", "FirstMIDINoteNumber", "FirstMidiNoteNumber",
-                        "NumberOfLogicalPipes", "WindchestGroup")) {
-                    sb.appendLine("$k=$v")
-                }
+                        "NumberOfLogicalPipes", "WindchestGroup")) sb.appendLine("$k=$v")
             }
             sb.appendLine()
         }
 
-        for (c in organ.couplers) {
-            sb.appendLine("[Coupler${c.number.toString().padStart(3, '0')}]")
-            sb.appendLine("Name=${c.name}")
-            c.sourceManual?.let { sb.appendLine("SourceManual=$it") }
-            c.destinationManual?.let { sb.appendLine("DestinationManual=$it") }
-            if (c.couplerType.isNotBlank()) sb.appendLine("CouplerType=${c.couplerType}")
-            if (c.unisonOff) sb.appendLine("UnisonOff=Y")
-            if (c.destinationKeyShift != 0) sb.appendLine("DestinationKeyShift=${c.destinationKeyShift}")
-            c.stopControlMIDIKeyNumber?.let { sb.appendLine("StopControlMIDIKeyNumber=$it") }
-            c.rawProperties.forEach { (k, v) ->
-                if (k !in listOf("Name", "SourceManual", "DestinationManual", "CouplerType", "Type",
-                        "UnisonOff", "DestinationKeyShift", "StopControlMIDIKeyNumber", "MIDIKeyNumber")) {
-                    sb.appendLine("$k=$v")
-                }
-            }
-            sb.appendLine()
-        }
-
-        for (t in organ.tremulants) {
-            sb.appendLine("[Tremulant${t.number.toString().padStart(3, '0')}]")
-            sb.appendLine("Name=${t.name}")
-            if (t.tremulantType.isNotBlank()) sb.appendLine("TremulantType=${t.tremulantType}")
-            t.period?.let { sb.appendLine("Period=$it") }
-            t.startRate?.let { sb.appendLine("StartRate=$it") }
-            t.stopRate?.let { sb.appendLine("StopRate=$it") }
-            t.ampModDepth?.let { sb.appendLine("AmpModDepth=$it") }
-            t.stopControlMIDIKeyNumber?.let { sb.appendLine("StopControlMIDIKeyNumber=$it") }
-            t.rawProperties.forEach { (k, v) ->
-                if (k !in listOf("Name", "TremulantType", "Type", "Period", "StartRate",
-                        "StopRate", "AmpModDepth", "StopControlMIDIKeyNumber", "MIDIKeyNumber")) {
-                    sb.appendLine("$k=$v")
-                }
-            }
-            sb.appendLine()
-        }
-
-        for ((section, props) in organ.otherSections) {
-            sb.appendLine("[$section]")
+        for ((sec, props) in organ.otherSections) {
+            sb.appendLine("[$sec]")
             props.forEach { (k, v) -> sb.appendLine("$k=$v") }
             sb.appendLine()
         }
-
         return sb.toString()
     }
 }
