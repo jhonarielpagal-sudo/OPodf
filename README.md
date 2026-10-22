@@ -5,44 +5,44 @@ Focused on **Stops**, **Ranks**, **Couplers**, **Tremulants** and **MIDI mapping
 
 ## Features (v0.2)
 
-- Open `.organ` files from storage
-- Parse and display:
-  - Organ info (name, church, manuals count)
-  - **Stops** with linked Ranks + MIDI key
-  - **Couplers** (source → destination, type, MIDI key)
-  - **Tremulants** (type, MIDI key)
-- Edit name and `StopControlMIDIKeyNumber` for Stops / Couplers / Tremulants
-- Save modified `.organ` file
-- Lightweight – no heavy GUI panel designer
+- Open / Save `.organ` files
+- Edit Stops, Ranks, Couplers, Tremulants
+- MIDI mapping (`StopControlMIDIKeyNumber`)
+- Lightweight UI (no heavy panel designer)
+
+## Download APK (GitHub Actions)
+
+Ang APK ay automatic na na-build sa GitHub.
+
+### Paano i-download ang APK:
+
+1. Pumunta sa **Actions** tab ng repo
+2. Click ang pinakabagong **Build APK** workflow
+3. Sa baba, under **Artifacts**, i-download ang `GoOdf-Android-debug`
+4. I-extract ang zip → makikita mo ang `.apk` file
+5. I-install sa phone (payagan ang "Unknown sources")
+
+### Manual trigger:
+
+1. Pumunta sa **Actions** → **Build APK**
+2. Click **Run workflow** → **Run workflow**
+
+### Release (optional):
+
+Kapag gumawa ka ng **Release** sa GitHub, automatic na mai-attach ang APK doon.
+
+## Build locally (optional)
+
+Kung may Android Studio ka:
+
+1. Open the project
+2. **Build → Build Bundle(s) / APK(s) → Build APK(s)**
+3. APK location: `app/build/outputs/apk/debug/app-debug.apk`
 
 ## Requirements
 
-- Android Studio Hedgehog (2023.1.1) or newer
-- Android SDK 34
-- Min SDK 26 (Android 8.0)
-
-## How to open in Android Studio
-
-1. Unzip this project
-2. Open Android Studio → **Open** → select the `GoOdf-Android` folder
-3. Wait for Gradle sync
-4. Run on emulator or real device
-
-## Important notes
-
-- This is a **starter / basic** editor. It does **not** fully support every GrandOrgue feature yet.
-- Always work on **copies** of your `.organ` files.
-- Complex sections (Panels, Enclosures, etc.) are preserved as raw data when saving.
-- The parser focuses on Stops, Ranks, Couplers, Tremulants + MIDI mapping.
-
-## Sample file
-
-A demo `.organ` file is included in the `sample/` folder so you can test immediately.
+- Android 8.0+ (API 26)
 
 ## License
 
-You can use and modify this freely for your own GitHub repository.
-
----
-
-Made as a starting point for Android-based GrandOrgue ODF editing.
+Free to use and modify.
