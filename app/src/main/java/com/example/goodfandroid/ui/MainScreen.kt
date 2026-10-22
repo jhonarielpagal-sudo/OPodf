@@ -28,20 +28,28 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
     val context = LocalContext.current
     val organ = viewModel.organ
     val error = viewModel.errorMessage
+    val statusMessage = viewModel.statusMessage
 
+    // Use OpenDocument with */* so .organ files are always selectable
     val openLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri: Uri? ->
-        uri?.let {
-            try {
-                context.contentResolver.openInputStream(it)?.use { inputStream ->
-                    val content = BufferedReader(InputStreamReader(inputStream)).readText()
-                    val name = it.lastPathSegment ?: "opened.organ"
+        if (uri == null) {
+            viewModel.setStatus("No file selected")
+            return@rememberLauncherForActivityResult
+        }
+        try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                val content = BufferedReader(InputStreamReader(inputStream, Charsets.UTF_8)).readText()
+                val name = uri.lastPathSegment?.substringAfterLast('/') ?: "opened.organ"
+                if (content.isBlank()) {
+                    viewModel.setError("File is empty")
+                } else {
                     viewModel.loadFromText(content, name)
                 }
-            } catch (e: Exception) {
-                viewModel.loadFromText("", "error")
-            }
+            } ?: viewModel.setError("Cannot open file stream")
+        } catch (e: Exception) {
+            viewModel.setError("Error reading file: ${e.message}")
         }
     }
 
@@ -49,10 +57,15 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
         contract = ActivityResultContracts.CreateDocument("text/plain")
     ) { uri: Uri? ->
         uri?.let {
-            viewModel.getOrganText()?.let { text ->
-                context.contentResolver.openOutputStream(it)?.use { outputStream ->
-                    outputStream.write(text.toByteArray())
+            try {
+                viewModel.getOrganText()?.let { text ->
+                    context.contentResolver.openOutputStream(it)?.use { outputStream ->
+                        outputStream.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                    viewModel.setStatus("Saved successfully")
                 }
+            } catch (e: Exception) {
+                viewModel.setError("Save failed: ${e.message}")
             }
         }
     }
@@ -63,13 +76,16 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                 title = { Text("GoOdf Android") },
                 actions = {
                     TextButton(onClick = {
-                        openLauncher.launch(arrayOf("*/*", "text/plain"))
+                        // */* allows selecting any file including .organ
+                        openLauncher.launch(arrayOf("*/*"))
                     }) {
                         Text("Open")
                     }
                     if (organ != null) {
                         TextButton(onClick = {
-                            val suggestedName = viewModel.fileName ?: "edited.organ"
+                            val suggestedName = (viewModel.fileName ?: "edited").let {
+                                if (it.endsWith(".organ")) it else "$it.organ"
+                            }
                             saveLauncher.launch(suggestedName)
                         }) {
                             Text("Save")
@@ -86,9 +102,22 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                 .padding(16.dp)
         ) {
             if (error != null) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                ) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        modifier = Modifier.padding(12.dp)
+                    )
+                }
+            }
+
+            if (statusMessage != null && error == null) {
                 Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
+                    text = statusMessage,
+                    style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
             }
@@ -105,13 +134,13 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(onClick = {
-                            openLauncher.launch(arrayOf("*/*", "text/plain"))
+                            openLauncher.launch(arrayOf("*/*"))
                         }) {
                             Text("Open .organ file")
                         }
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
                         Text(
-                            "Supports Stops, Ranks, Couplers & Tremulants\nFocus on MIDI mapping",
+                            "Tip: Select any .organ file from your storage.\nSupports Stops, Ranks, Couplers & Tremulants.",
                             style = MaterialTheme.typography.bodySmall
                         )
                     }
@@ -134,6 +163,10 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                             Text(organ.churchName, style = MaterialTheme.typography.bodyMedium)
                         }
                         Text(
+                            "File: ${viewModel.fileName ?: "?"}",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
                             "Manuals: ${organ.manuals.size}  |  Stops: ${organ.stops.size}  |  Ranks: ${organ.ranks.size}",
                             style = MaterialTheme.typography.bodySmall
                         )
@@ -146,18 +179,38 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
 
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (organ.stops.isEmpty() && organ.ranks.isEmpty() && organ.couplers.isEmpty()) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                    ) {
+                        Text(
+                            "Walang nakitang Stop/Rank/Coupler.\n" +
+                            "Baka ibang format ang .organ file o walang [Stopxxx]/[Rankxxx] sections.\n" +
+                            "Subukan ang sample/demo.organ mula sa repo.",
+                            modifier = Modifier.padding(12.dp),
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f)
                 ) {
-                    // ===== STOPS =====
+                    // STOPS
                     item {
                         Text(
-                            "Stops",
+                            "Stops (${organ.stops.size})",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
+                    }
+                    if (organ.stops.isEmpty()) {
+                        item {
+                            Text("— walang stop —", style = MaterialTheme.typography.bodySmall)
+                        }
                     }
                     items(organ.stops) { stop ->
                         StopCard(
@@ -167,12 +220,42 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                         )
                     }
 
-                    // ===== COUPLERS =====
+                    // RANKS (show list too so user can see them)
+                    item {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Ranks (${organ.ranks.size})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    if (organ.ranks.isEmpty()) {
+                        item {
+                            Text("— walang rank —", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    items(organ.ranks) { rank ->
+                        Card(modifier = Modifier.fillMaxWidth()) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Text(
+                                    "Rank${rank.number.toString().padStart(3, '0')}: ${rank.name}",
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    "MIDI start: ${rank.firstMidiNoteNumber}  |  Pipes: ${rank.numberOfLogicalPipes}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
+                    // COUPLERS
                     if (organ.couplers.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Couplers",
+                                "Couplers (${organ.couplers.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(vertical = 4.dp)
@@ -187,12 +270,12 @@ fun MainScreen(viewModel: OrganViewModel = viewModel()) {
                         }
                     }
 
-                    // ===== TREMULANTS =====
+                    // TREMULANTS
                     if (organ.tremulants.isNotEmpty()) {
                         item {
                             Spacer(modifier = Modifier.height(8.dp))
                             Text(
-                                "Tremulants",
+                                "Tremulants (${organ.tremulants.size})",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.Bold,
                                 modifier = Modifier.padding(vertical = 4.dp)
@@ -341,8 +424,7 @@ fun CouplerCard(
                     },
                     label = { Text("StopControlMIDIKeyNumber") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    supportingText = { Text("MIDI note that controls this coupler") }
+                    singleLine = true
                 )
             }
         }
@@ -410,8 +492,7 @@ fun TremulantCard(
                     },
                     label = { Text("StopControlMIDIKeyNumber") },
                     modifier = Modifier.fillMaxWidth(),
-                    singleLine = true,
-                    supportingText = { Text("MIDI note that controls this tremulant") }
+                    singleLine = true
                 )
             }
         }

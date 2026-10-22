@@ -18,15 +18,35 @@ class OrganViewModel : ViewModel() {
     var errorMessage by mutableStateOf<String?>(null)
         private set
 
+    var statusMessage by mutableStateOf<String?>(null)
+        private set
+
     var isLoading by mutableStateOf(false)
         private set
+
+    fun setError(msg: String) {
+        errorMessage = msg
+        statusMessage = null
+    }
+
+    fun setStatus(msg: String) {
+        statusMessage = msg
+        errorMessage = null
+    }
 
     fun loadFromText(content: String, name: String = "untitled.organ") {
         isLoading = true
         errorMessage = null
         try {
-            organ = OrganParser.parse(content)
+            val parsed = OrganParser.parse(content)
+            organ = parsed
             fileName = name
+            val summary = "Loaded: ${parsed.stops.size} stops, ${parsed.ranks.size} ranks, " +
+                    "${parsed.couplers.size} couplers, ${parsed.tremulants.size} tremulants"
+            statusMessage = summary
+            if (parsed.stops.isEmpty() && parsed.ranks.isEmpty()) {
+                errorMessage = "File opened but no Stop/Rank sections found. Check if this is a valid GrandOrgue .organ file."
+            }
         } catch (e: Exception) {
             errorMessage = "Failed to parse: ${e.message}"
             organ = null
@@ -39,7 +59,6 @@ class OrganViewModel : ViewModel() {
         return organ?.let { OrganParser.write(it) }
     }
 
-    // --- Stop helpers ---
     fun updateStopMidiKey(stopNumber: Int, midiKey: Int?) {
         organ = organ?.copy(
             stops = organ!!.stops.map { stop ->
@@ -58,7 +77,6 @@ class OrganViewModel : ViewModel() {
         )
     }
 
-    // --- Coupler helpers ---
     fun updateCouplerMidiKey(couplerNumber: Int, midiKey: Int?) {
         organ = organ?.copy(
             couplers = organ!!.couplers.map { c ->
@@ -77,7 +95,6 @@ class OrganViewModel : ViewModel() {
         )
     }
 
-    // --- Tremulant helpers ---
     fun updateTremulantMidiKey(tremNumber: Int, midiKey: Int?) {
         organ = organ?.copy(
             tremulants = organ!!.tremulants.map { t ->
@@ -100,5 +117,6 @@ class OrganViewModel : ViewModel() {
         organ = null
         fileName = null
         errorMessage = null
+        statusMessage = null
     }
 }
