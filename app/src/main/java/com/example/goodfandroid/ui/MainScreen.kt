@@ -157,7 +157,7 @@ fun ManualsTab(vm: OrganViewModel) {
             Button(onClick = { vm.addManual(isPedal = true) }) { Text("+ Pedal") }
             Button(onClick = { vm.addManual(isPedal = false) }) { Text("+ Manual") }
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(vm.organ.manuals, key = { it.number }) { manual ->
                 ManualCard(manual, onUpdate = { vm.updateManual(it) }, onDelete = { vm.deleteManual(manual.number) })
@@ -183,7 +183,7 @@ fun ManualCard(manual: Manual, onUpdate: (Manual) -> Unit, onDelete: () -> Unit)
                 Text(if (expanded) "▲" else "▼")
             }
             if (expanded) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(value = name, onValueChange = {
                     name = it
                     onUpdate(manual.copy(name = it))
@@ -210,7 +210,7 @@ fun ManualCard(manual: Manual, onUpdate: (Manual) -> Unit, onDelete: () -> Unit)
 fun WindchestsTab(vm: OrganViewModel) {
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         Button(onClick = { vm.addWindchest() }) { Text("+ Windchest") }
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(vm.organ.windchests, key = { it.number }) { w ->
                 var expanded by remember { mutableStateOf(false) }
@@ -236,7 +236,7 @@ fun WindchestsTab(vm: OrganViewModel) {
 fun TremulantsTab(vm: OrganViewModel) {
     Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
         Button(onClick = { vm.addTremulant() }) { Text("+ Tremulant") }
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(vm.organ.tremulants, key = { it.number }) { t ->
                 var expanded by remember { mutableStateOf(false) }
@@ -276,7 +276,7 @@ fun RanksTab(vm: OrganViewModel, onImportRanks: () -> Unit) {
             }) { Text("+ Rank") }
             Button(onClick = onImportRanks) { Text("Import Ranks from .organ") }
         }
-        Spacer(Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(4.dp))
         OutlinedTextField(
             value = newRankName,
             onValueChange = { newRankName = it },
@@ -284,7 +284,7 @@ fun RanksTab(vm: OrganViewModel, onImportRanks: () -> Unit) {
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(vm.organ.ranks, key = { it.number }) { r ->
                 var expanded by remember { mutableStateOf(false) }
