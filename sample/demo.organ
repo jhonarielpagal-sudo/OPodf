@@ -1,0 +1,125 @@
+[Organ]
+ChurchName=Demo Church
+OrganName=Simple Demo Organ
+NumberOfManuals=2
+HasPedals=Y
+
+[Manual000]
+Name=Pedal
+NumberOfLogicalKeys=32
+FirstAccessibleKeyMIDINoteNumber=36
+NumberOfAccessibleKeys=32
+MIDIInputNumber=1
+NumberOfStops=2
+NumberOfCouplers=1
+NumberOfTremulants=0
+Stop001=001
+Stop002=002
+Coupler001=001
+
+[Manual001]
+Name=Great
+NumberOfLogicalKeys=61
+FirstAccessibleKeyMIDINoteNumber=36
+NumberOfAccessibleKeys=61
+MIDIInputNumber=2
+NumberOfStops=3
+NumberOfCouplers=1
+NumberOfTremulants=1
+Stop001=003
+Stop002=004
+Stop003=005
+Coupler001=002
+Tremulant001=001
+
+[Stop001]
+Name=Subbass 16
+NumberOfRanks=1
+Rank001=001
+StopControlMIDIKeyNumber=36
+
+[Stop002]
+Name=Principal 8
+NumberOfRanks=1
+Rank001=002
+StopControlMIDIKeyNumber=38
+
+[Stop003]
+Name=Principal 8
+NumberOfRanks=1
+Rank001=003
+StopControlMIDIKeyNumber=48
+
+[Stop004]
+Name=Flute 4
+NumberOfRanks=1
+Rank001=004
+StopControlMIDIKeyNumber=50
+
+[Stop005]
+Name=Mixture
+NumberOfRanks=2
+Rank001=005
+Rank002=006
+StopControlMIDIKeyNumber=52
+
+[Rank001]
+Name=Subbass 16
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=32
+WindchestGroup=1
+
+[Rank002]
+Name=Principal Bass 8
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=32
+WindchestGroup=1
+
+[Rank003]
+Name=Principal 8
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=61
+WindchestGroup=2
+
+[Rank004]
+Name=Flute 4
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=61
+WindchestGroup=2
+
+[Rank005]
+Name=Mixture IV
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=61
+WindchestGroup=2
+
+[Rank006]
+Name=Mixture IV (2nd rank)
+FirstMIDINoteNumber=36
+NumberOfLogicalPipes=61
+WindchestGroup=2
+
+[Coupler001]
+Name=Great to Pedal
+SourceManual=1
+DestinationManual=0
+CouplerType=Normal
+DestinationKeyShift=0
+StopControlMIDIKeyNumber=60
+
+[Coupler002]
+Name=Swell to Great
+SourceManual=2
+DestinationManual=1
+CouplerType=Normal
+DestinationKeyShift=0
+StopControlMIDIKeyNumber=62
+
+[Tremulant001]
+Name=Great Tremulant
+TremulantType=Synth
+Period=200
+StartRate=30
+StopRate=30
+AmpModDepth=20
+StopControlMIDIKeyNumber=64
